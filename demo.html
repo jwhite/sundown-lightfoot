@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sun Arc Control Demo</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .demo-container {
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .demo-title {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 28px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .demo-controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .demo-controls h3 {
+            color: white;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-group label {
+            display: block;
+            color: white;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .control-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .control-group input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .control-group input:focus {
+            outline: none;
+            border-color: #FFD700;
+            box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="demo-container">
+            <h1 class="demo-title">🌅 Sun Arc Control</h1>
+            
+            <div class="demo-controls">
+                <h3>⚙️ Settings</h3>
+                <div class="control-group">
+                    <label for="sunrise">Sunrise Time:</label>
+                    <input 
+                        type="time" 
+                        id="sunrise" 
+                        v-model="sunriseTime"
+                        placeholder="06:30"
+                    >
+                </div>
+                <div class="control-group">
+                    <label for="sunset">Sunset Time:</label>
+                    <input 
+                        type="time" 
+                        id="sunset" 
+                        v-model="sunsetTime"
+                        placeholder="19:30"
+                    >
+                </div>
+            </div>
+            
+            <sun-arc-control 
+                :sunrise-time="sunriseTime"
+                :sunset-time="sunsetTime"
+            ></sun-arc-control>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref } = Vue;
+
+        // Sun Arc Control Component
+        const SunArcControl = {
+            template: `
+                <div class="sun-arc-control">
+                    <div class="sun-arc-container">
+                        <svg
+                            :width="svgSize"
+                            :height="svgSize / 2 + 40"
+                            viewBox="0 0 400 240"
+                            class="sun-arc-svg"
+                        >
+                            <!-- Background arc (horizon line) -->
+                            <path
+                                :d="backgroundArcPath"
+                                stroke="#e0e0e0"
+                                stroke-width="4"
+                                fill="none"
+                                class="background-arc"
+                            />
+                            
+                            <!-- Active arc (progress from sunrise to current time) -->
+                            <path
+                                :d="activeArcPath"
+                                stroke="url(#sunGradient)"
+                                stroke-width="6"
+                                fill="none"
+                                class="active-arc"
+                                stroke-linecap="round"
+                                :stroke-dasharray="activeDashArray"
+                                :stroke-dashoffset="activeDashOffset"
+                            />
+                            
+                            <!-- Sun icon -->
+                            <g :transform="'translate(' + sunPosition.x + ', ' + sunPosition.y + ')'">
+                                <circle
+                                    r="12"
+                                    fill="url(#sunGradient)"
+                                    class="sun-circle"
+                                />
+                                <!-- Sun rays -->
+                                <g class="sun-rays">
+                                    <line v-for="(ray, i) in rayPositions" :key="i"
+                                        :x1="ray.x1"
+                                        :y1="ray.y1"
+                                        :x2="ray.x2"
+                                        :y2="ray.y2"
+                                        stroke="#FFD700"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                    />
+                                </g>
+                            </g>
+                            
+                            <!-- Sunrise icon -->
+                            <g transform="translate(50, 200)">
+                                <circle r="8" fill="#FF6B35" opacity="0.7" />
+                                <text x="0" y="25" text-anchor="middle" class="time-label">{{ formattedSunrise }}</text>
+                            </g>
+                            
+                            <!-- Sunset icon -->
+                            <g transform="translate(350, 200)">
+                                <circle r="8" fill="#FF6B35" opacity="0.7" />
+                                <text x="0" y="25" text-anchor="middle" class="time-label">{{ formattedSunset }}</text>
+                            </g>
+                            
+                            <!-- Current time display -->
+                            <text x="200" y="30" text-anchor="middle" class="current-time">{{ formattedCurrentTime }}</text>
+                            
+                            <!-- Gradients -->
+                            <defs>
+                                <linearGradient id="sunGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+                                    <stop offset="50%" style="stop-color:#FFA500;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#FF6B35;stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    
+                    <!-- Status text -->
+                    <div class="status-text">
+                        <p class="status-message">{{ statusMessage }}</p>
+                        <p class="time-remaining">{{ timeRemaining }}</p>
+                    </div>
+                </div>
+            `,
+            props: {
+                sunriseTime: {
+                    type: String,
+                    default: '06:30'
+                },
+                sunsetTime: {
+                    type: String,
+                    default: '19:30'
+                },
+                timezone: {
+                    type: String,
+                    default: 'local'
+                }
+            },
+            setup(props) {
+                const currentTime = ref(new Date());
+                const svgSize = ref(400);
+
+                // Update current time every minute
+                let timeInterval = setInterval(() => {
+                    currentTime.value = new Date();
+                }, 60000);
+
+                Vue.onUnmounted(() => {
+                    if (timeInterval) {
+                        clearInterval(timeInterval);
+                    }
+                });
+
+                // Computed properties for time calculations
+                const sunriseDate = Vue.computed(() => {
+                    const today = new Date();
+                    const [hours, minutes] = props.sunriseTime.split(':');
+                    const sunrise = new Date(today.getFullYear(), today.getMonth(), today.getDate(), parseInt(hours), parseInt(minutes));
+                    return sunrise;
+                });
+
+                const sunsetDate = Vue.computed(() => {
+                    const today = new Date();
+                    const [hours, minutes] = props.sunsetTime.split(':');
+                    const sunset = new Date(today.getFullYear(), today.getMonth(), today.getDate(), parseInt(hours), parseInt(minutes));
+                    return sunset;
+                });
+
+                const dayDuration = Vue.computed(() => {
+                    return sunsetDate.value.getTime() - sunriseDate.value.getTime();
+                });
+
+                const timeFromSunrise = Vue.computed(() => {
+                    return currentTime.value.getTime() - sunriseDate.value.getTime();
+                });
+
+                const dayProgress = Vue.computed(() => {
+                    if (currentTime.value < sunriseDate.value) return 0;
+                    if (currentTime.value > sunsetDate.value) return 1;
+                    return Math.max(0, Math.min(1, timeFromSunrise.value / dayDuration.value));
+                });
+
+                // Arc calculations - ensure perfect alignment with sunrise/sunset markers
+                const sunriseX = 50;
+                const sunsetX = 350;
+                const arcY = 200;
+                const centerX = (sunriseX + sunsetX) / 2; // 200
+                const centerY = arcY; // 200
+                const radius = (sunsetX - sunriseX) / 2; // 150
+
+                const backgroundArcPath = Vue.computed(() => {
+                    return `M ${sunriseX} ${arcY} A ${radius} ${radius} 0 0 1 ${sunsetX} ${arcY}`;
+                });
+
+                const activeArcPath = Vue.computed(() => {
+                    if (dayProgress.value === 0) {
+                        return `M ${sunriseX} ${arcY} A ${radius} ${radius} 0 0 1 ${sunriseX} ${arcY}`;
+                    }
+                    
+                    // The active arc should always go from sunrise to sunset (full arc)
+                    // but only be visible up to the current progress
+                    const largeArcFlag = 1; // Always use large arc for full semicircle
+                    return `M ${sunriseX} ${arcY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${sunsetX} ${arcY}`;
+                });
+
+                // Calculate dash array to show only the progress portion
+                const arcLength = Math.PI * radius; // Half circumference
+                const activeDashArray = Vue.computed(() => {
+                    const progressLength = arcLength * dayProgress.value;
+                    const remainingLength = arcLength - progressLength;
+                    return `${progressLength} ${remainingLength}`;
+                });
+
+                const activeDashOffset = Vue.computed(() => {
+                    return 0;
+                });
+
+                const sunPosition = Vue.computed(() => {
+                    // Calculate sun position along the same arc
+                    const angle = Math.PI * dayProgress.value; // 0 to PI
+                    const x = centerX - radius * Math.cos(angle);
+                    const y = centerY - radius * Math.sin(angle);
+                    return { x, y };
+                });
+
+                // Sun rays positions
+                const rayPositions = Vue.computed(() => {
+                    const rays = [];
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i * Math.PI * 2) / 8;
+                        const innerRadius = 16;
+                        const outerRadius = 24;
+                        rays.push({
+                            x1: Math.cos(angle) * innerRadius,
+                            y1: Math.sin(angle) * innerRadius,
+                            x2: Math.cos(angle) * outerRadius,
+                            y2: Math.sin(angle) * outerRadius
+                        });
+                    }
+                    return rays;
+                });
+
+                // Formatted time strings
+                const formattedCurrentTime = Vue.computed(() => {
+                    return currentTime.value.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                });
+
+                const formattedSunrise = Vue.computed(() => {
+                    return sunriseDate.value.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                });
+
+                const formattedSunset = Vue.computed(() => {
+                    return sunsetDate.value.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                });
+
+                // Status message
+                const statusMessage = Vue.computed(() => {
+                    if (currentTime.value < sunriseDate.value) {
+                        return 'Before sunrise';
+                    } else if (currentTime.value > sunsetDate.value) {
+                        return 'After sunset';
+                    } else {
+                        return 'Daylight hours';
+                    }
+                });
+
+                const timeRemaining = Vue.computed(() => {
+                    if (currentTime.value < sunriseDate.value) {
+                        const diff = sunriseDate.value.getTime() - currentTime.value.getTime();
+                        const hours = Math.floor(diff / (1000 * 60 * 60));
+                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        return `${hours}h ${minutes}m until sunrise`;
+                    } else if (currentTime.value > sunsetDate.value) {
+                        const tomorrow = new Date(sunriseDate.value.getTime() + 24 * 60 * 60 * 1000);
+                        const diff = tomorrow.getTime() - currentTime.value.getTime();
+                        const hours = Math.floor(diff / (1000 * 60 * 60));
+                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        return `${hours}h ${minutes}m until sunrise`;
+                    } else {
+                        const diff = sunsetDate.value.getTime() - currentTime.value.getTime();
+                        const hours = Math.floor(diff / (1000 * 60 * 60));
+                        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                        return `${hours}h ${minutes}m until sunset`;
+                    }
+                });
+
+                return {
+                    currentTime,
+                    svgSize,
+                    sunriseDate,
+                    sunsetDate,
+                    dayDuration,
+                    timeFromSunrise,
+                    dayProgress,
+                    backgroundArcPath,
+                    activeArcPath,
+                    activeDashArray,
+                    activeDashOffset,
+                    sunPosition,
+                    rayPositions,
+                    formattedCurrentTime,
+                    formattedSunrise,
+                    formattedSunset,
+                    statusMessage,
+                    timeRemaining
+                };
+            }
+        };
+
+        // Main App
+        createApp({
+            components: {
+                SunArcControl
+            },
+            setup() {
+                const sunriseTime = ref('06:30');
+                const sunsetTime = ref('19:30');
+
+                return {
+                    sunriseTime,
+                    sunsetTime
+                };
+            }
+        }).mount('#app');
+    </script>
+
+    <style>
+        .sun-arc-control {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            padding: 20px;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sun-arc-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .sun-arc-svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .background-arc {
+            opacity: 0.3;
+        }
+
+        .active-arc {
+            filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6));
+        }
+
+        .sun-circle {
+            filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.8));
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .sun-rays {
+            animation: rotate 20s linear infinite;
+            transform-origin: 0 0;
+        }
+
+        .time-label {
+            fill: rgba(255, 255, 255, 0.9);
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .current-time {
+            fill: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .status-text {
+            text-align: center;
+        }
+
+        .status-message {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0 0 8px 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .time-remaining {
+            font-size: 14px;
+            opacity: 0.9;
+            margin: 0;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Responsive design */
+        @media (max-width: 600px) {
+            .sun-arc-control {
+                padding: 15px;
+            }
+            
+            .current-time {
+                font-size: 16px;
+            }
+            
+            .status-message {
+                font-size: 14px;
+            }
+            
+            .time-remaining {
+                font-size: 12px;
+            }
+        }
+    </style>
+</body>
+</html>

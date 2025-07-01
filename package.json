@@ -1,0 +1,49 @@
+{
+  "name": "lightfoot-sundown",
+  "version": "1.0.0",
+  "description": "A beautiful Vue.js sun arc control component for Home Assistant that displays the sun's position throughout the day",
+  "main": "SunArcControl.vue",
+  "scripts": {
+    "dev": "serve demo.html",
+    "build": "echo 'No build step required for standalone component'",
+    "preview": "serve ."
+  },
+  "keywords": [
+    "vue",
+    "vue3",
+    "home-assistant",
+    "sun",
+    "sunrise",
+    "sunset",
+    "arc",
+    "control",
+    "component",
+    "svg",
+    "animation"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.0.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/lightfoot-sundown.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/lightfoot-sundown/issues"
+  },
+  "homepage": "https://github.com/yourusername/lightfoot-sundown#readme",
+  "files": [
+    "SunArcControl.vue",
+    "sun-arc-card.js",
+    "demo.html",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
